@@ -1,0 +1,25 @@
+# הגדרת שירות השרת ב-Render. ערכי הסודות מוזנים בממשק של Render ולא כאן.
+services:
+  - type: web
+    name: encrypted-records-server
+    runtime: node
+    rootDir: server
+    plan: free
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: JWT_EXPIRES_IN
+        value: 60m
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: CLIENT_ORIGIN
+        sync: false

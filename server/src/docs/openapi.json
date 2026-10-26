@@ -1,0 +1,1321 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Encrypted Records API",
+    "version": "1.0.0",
+    "description": "API של מערכת רשומות מוצפנות. התוכן נשלח ומוחזר כטקסט רגיל בשדה content; ההצפנה (AES-256-GCM) מתבצעת בשרת בלבד ואינה חלק מהחוזה.\n\nהדגמה: התחברי ב-POST /api/auth/login, העתיקי את accessToken, לחצי Authorize והדביקי אותו."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "השרת הנוכחי"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Health"
+    },
+    {
+      "name": "Auth",
+      "description": "הרשמה, התחברות ופרטי המשתמש"
+    },
+    {
+      "name": "Cipher Records",
+      "description": "רשומות. כללי הגישה: מסמך 02 סעיף 6"
+    },
+    {
+      "name": "Admin",
+      "description": "מנהל בלבד"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "errorCode",
+          "message"
+        ],
+        "properties": {
+          "errorCode": {
+            "type": "string",
+            "enum": [
+              "VALIDATION_ERROR",
+              "INVALID_CREDENTIALS",
+              "UNAUTHORIZED",
+              "FORBIDDEN",
+              "RECORD_NOT_FOUND",
+              "RECIPIENT_NOT_FOUND",
+              "ROUTE_NOT_FOUND",
+              "EMAIL_ALREADY_EXISTS",
+              "PAYLOAD_TOO_LARGE",
+              "TOO_MANY_REQUESTS",
+              "INTERNAL_ERROR"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "details": {
+            "type": "array",
+            "description": "בשגיאת ולידציה בלבד",
+            "items": {
+              "type": "object",
+              "properties": {
+                "field": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "Role": {
+        "type": "string",
+        "enum": [
+          "USER",
+          "ADMIN"
+        ]
+      },
+      "Category": {
+        "type": "string",
+        "enum": [
+          "DOCUMENT",
+          "NOTE",
+          "CODE",
+          "OTHER"
+        ]
+      },
+      "Visibility": {
+        "type": "string",
+        "enum": [
+          "PRIVATE",
+          "PUBLIC"
+        ]
+      },
+      "Credentials": {
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 255,
+            "description": "נשמר ב-lowercase"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "description": "8 תווים לפחות, אות אחת ומספר אחד לפחות (בהרשמה)"
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "role"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          }
+        }
+      },
+      "AuthResponse": {
+        "type": "object",
+        "required": [
+          "accessToken",
+          "tokenType",
+          "expiresIn",
+          "user"
+        ],
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          },
+          "tokenType": {
+            "type": "string",
+            "enum": [
+              "Bearer"
+            ]
+          },
+          "expiresIn": {
+            "type": "integer",
+            "description": "תוקף בשניות",
+            "example": 3600
+          },
+          "user": {
+            "$ref": "#/components/schemas/User"
+          }
+        }
+      },
+      "AdminUser": {
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "role",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CipherRecordListItem": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "description",
+          "category",
+          "visibility",
+          "createdAt",
+          "senderEmail"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 150
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 300,
+            "description": "null כשאין תיאור"
+          },
+          "category": {
+            "$ref": "#/components/schemas/Category"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/Visibility"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "senderEmail": {
+            "type": "string",
+            "format": "email"
+          }
+        }
+      },
+      "CipherRecordDetails": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CipherRecordListItem"
+          },
+          {
+            "type": "object",
+            "required": [
+              "recipientEmail",
+              "content"
+            ],
+            "properties": {
+              "recipientEmail": {
+                "type": "string",
+                "format": "email",
+                "nullable": true,
+                "description": "null כשהפונה אינו השולח ואינו הנמען"
+              },
+              "content": {
+                "type": "string",
+                "nullable": true,
+                "description": "התוכן המפוענח. null כשהפונה אינו השולח ואינו הנמען"
+              }
+            }
+          }
+        ]
+      },
+      "CipherRecordPage": {
+        "type": "object",
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "totalCount"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CipherRecordListItem"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          },
+          "totalCount": {
+            "type": "integer"
+          }
+        }
+      },
+      "CreateCipherRecordRequest": {
+        "type": "object",
+        "required": [
+          "title",
+          "recipientEmail",
+          "category",
+          "content"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 150
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 300,
+            "nullable": true
+          },
+          "recipientEmail": {
+            "type": "string",
+            "format": "email",
+            "description": "אימייל של משתמש קיים. מותר גם האימייל של השולח עצמו"
+          },
+          "category": {
+            "$ref": "#/components/schemas/Category"
+          },
+          "visibility": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Visibility"
+              }
+            ],
+            "default": "PRIVATE"
+          },
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20000,
+            "description": "טקסט רגיל. השרת מצפין אותו לפני השמירה. מעל 20,000 תווים: 400 VALIDATION_ERROR"
+          }
+        }
+      },
+      "UpdateCipherRecordRequest": {
+        "type": "object",
+        "required": [
+          "title",
+          "category",
+          "visibility"
+        ],
+        "description": "רק חמשת השדות האלה ניתנים לשינוי. הבעלים והנמען אינם משתנים לעולם, גם אם נשלחו.",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 150
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 300,
+            "nullable": true,
+            "description": "null או מחרוזת ריקה מנקים את התיאור. אם השדה לא נשלח, התיאור נשאר כפי שהוא"
+          },
+          "category": {
+            "$ref": "#/components/schemas/Category"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/Visibility"
+          },
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20000,
+            "description": "אופציונלי. אם נשלח: השרת מצפין אותו מחדש והתוכן הקודם מוחלף. אם לא נשלח: התוכן הקיים נשאר כפי שהוא. מחרוזת ריקה אינה תקפה (400)"
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/health": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "בדיקת חיות השרת",
+        "description": "הרשאות: פתוח.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "השרת פעיל",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "ok"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                },
+                "example": {
+                  "status": "ok",
+                  "timestamp": "2026-10-26T12:00:00.000Z"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/register": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "הרשמה",
+        "description": "הרשאות: פתוח. יוצר חשבון USER ומחזיר טוקן (התחברות אוטומטית). שדה אימות סיסמה אינו חלק מהחוזה.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Credentials"
+              },
+              "example": {
+                "email": "dana@example.com",
+                "password": "Example123"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "החשבון נוצר",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                },
+                "example": {
+                  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                  "tokenType": "Bearer",
+                  "expiresIn": 3600,
+                  "user": {
+                    "id": "3f1c2b9e-8a41-4f0e-9d3a-2c5b7e1a0f11",
+                    "email": "dana@example.com",
+                    "role": "USER"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "נתונים שאינם עומדים בסכמה (VALIDATION_ERROR)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "errorCode": "VALIDATION_ERROR",
+                  "message": "הנתונים שנשלחו אינם תקינים.",
+                  "details": [
+                    {
+                      "field": "title",
+                      "message": "כותרת היא שדה חובה"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "האימייל כבר רשום",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "errorCode": "EMAIL_ALREADY_EXISTS",
+                  "message": "כתובת האימייל כבר רשומה במערכת."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "יותר מדי ניסיונות",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "errorCode": "TOO_MANY_REQUESTS",
+                  "message": "יותר מדי ניסיונות. נסי שוב בעוד מספר דקות."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "שגיאה לא צפויה, כולל כשל פענוח (INTERNAL_ERROR)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "errorCode": "INTERNAL_ERROR",
+                  "message": "אירעה שגיאה פנימית בשרת."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "התחברות",
+        "description": "הרשאות: פתוח. מחזיר JWT לשעה. אותה הודעה בדיוק לאימייל שאינו קיים ולסיסמה שגויה.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Credentials"
+              },
+              "example": {
+                "email": "dana@example.com",
+                "password": "Example123"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "התחברות הצליחה",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                },
+                "example": {
+                  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                  "tokenType": "Bearer",
+                  "expiresIn": 3600,
+                  "user": {
+                    "id": "3f1c2b9e-8a41-4f0e-9d3a-2c5b7e1a0f11",
+                    "email": "dana@example.com",
+                    "role": "USER"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "נתונים שאינם עומדים בסכמה (VALIDATION_ERROR)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "errorCode": "VALIDATION_ERROR",
+                  "message": "הנתונים שנשלחו אינם תקינים.",
+                  "details": [
+                    {
+                      "field": "title",
+                      "message": "כותרת היא שדה חובה"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "אימייל או סיסמה שגויים",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "errorCode": "INVALID_CREDENTIALS",
+                  "message": "אימייל או סיסמה שגויים."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "יותר מדי ניסיונות התחברות",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "errorCode": "TOO_MANY_REQUESTS",
+                  "message": "יותר מדי ניסיונות. נסי שוב בעוד מספר דקות."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "שגיאה לא צפויה, כולל כשל פענוח (INTERNAL_ERROR)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "errorCode": "INTERNAL_ERROR",
+                  "message": "אירעה שגיאה פנימית בשרת."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "פרטי המשתמש המחובר",
+        "description": "הרשאות: מחובר. משמש את הקליינט לשחזור התחברות אחרי רענון.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "המשתמש לפי הטוקן",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                },
+                "example": {
+                  "id": "3f1c2b9e-8a41-4f0e-9d3a-2c5b7e1a0f11",
+                  "email": "dana@example.com",
+                  "role": "USER"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "טוקן חסר, פגום או שפג תוקפו (UNAUTHORIZED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "errorCode": "UNAUTHORIZED",
+                  "message": "נדרשת התחברות."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "שגיאה לא צפויה, כולל כשל פענוח (INTERNAL_ERROR)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "errorCode": "INTERNAL_ERROR",
+                  "message": "אירעה שגיאה פנימית בשרת."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cipher-records": {
+      "get": {
+        "tags": [
+          "Cipher Records"
+        ],
+        "summary": "רשימת רשומות",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "הרשאות: מחובר. USER רואה את רשומותיו, רשומות שנשלחו אליו וכל הרשומות הציבוריות. ADMIN רואה את כל הרשומות. הרשימה אינה כוללת תוכן ואימייל נמען. החיפוש פועל על הכותרת בלבד, כי התוכן מוצפן במסד.",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "description": "חיפוש חלקי בכותרת, לא תלוי רישיות",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Category"
+            }
+          },
+          {
+            "name": "sortDirection",
+            "in": "query",
+            "required": false,
+            "description": "מיון לפי תאריך יצירה",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ASC",
+                "DESC"
+              ],
+              "default": "DESC"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "description": "מקסימום 100. ערך גדול יותר נדחה ב-400",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "עמוד תוצאות",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CipherRecordPage"
+                },
+                "example": {
+                  "items": [
+                    {
+                      "id": "b8e2d6a4-1c3f-4e5a-9b7d-0f2e4c6a8b10",
+                      "title": "חוזה שכירות",
+                      "description": "טיוטה ראשונה לבדיקה",
+                      "category": "DOCUMENT",
+                      "visibility": "PRIVATE",
+                      "createdAt": "2026-10-26T10:00:00.000Z",
+                      "senderEmail": "dana@example.com"
+                    }
+                  ],
+                  "page": 1,
+                  "pageSize": 20,
+                  "totalCount": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "נתונים שאינם עומדים בסכמה (VALIDATION_ERROR)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "errorCode": "VALIDATION_ERROR",
+                  "message": "הנתונים שנשלחו אינם תקינים.",
+                  "details": [
+                    {
+                      "field": "title",
+                      "message": "כותרת היא שדה חובה"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "טוקן חסר, פגום או שפג תוקפו (UNAUTHORIZED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "errorCode": "UNAUTHORIZED",
+                  "message": "נדרשת התחברות."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "שגיאה לא צפויה, כולל כשל פענוח (INTERNAL_ERROR)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "errorCode": "INTERNAL_ERROR",
+                  "message": "אירעה שגיאה פנימית בשרת."
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Cipher Records"
+        ],
+        "summary": "יצירת רשומה",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "הרשאות: מחובר. הבעלים נקבע מהטוקן. השרת מצפין את content לפני השמירה. התשובה אינה כוללת את התוכן.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCipherRecordRequest"
+              },
+              "example": {
+                "title": "חוזה שכירות",
+                "description": "טיוטה ראשונה לבדיקה",
+                "recipientEmail": "rivka@example.com",
+                "category": "DOCUMENT",
+                "visibility": "PRIVATE",
+                "content": "מספר החשבון הוא 12-345-6789"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "הרשומה נוצרה",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CipherRecordListItem"
+                },
+                "example": {
+                  "id": "b8e2d6a4-1c3f-4e5a-9b7d-0f2e4c6a8b10",
+                  "title": "חוזה שכירות",
+                  "description": "טיוטה ראשונה לבדיקה",
+                  "category": "DOCUMENT",
+                  "visibility": "PRIVATE",
+                  "createdAt": "2026-10-26T10:00:00.000Z",
+                  "senderEmail": "dana@example.com"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "נתונים שאינם עומדים בסכמה (VALIDATION_ERROR)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "errorCode": "VALIDATION_ERROR",
+                  "message": "הנתונים שנשלחו אינם תקינים.",
+                  "details": [
+                    {
+                      "field": "title",
+                      "message": "כותרת היא שדה חובה"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "טוקן חסר, פגום או שפג תוקפו (UNAUTHORIZED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "errorCode": "UNAUTHORIZED",
+                  "message": "נדרשת התחברות."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "נמען שאינו קיים",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "errorCode": "RECIPIENT_NOT_FOUND",
+                  "message": "לא ניתן לשלוח רשומה למשתמש המבוקש."
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "גוף הבקשה כבד מ-1mb (PAYLOAD_TOO_LARGE). חריגה מאורך התוכן היא 400 ולא 413.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "errorCode": "PAYLOAD_TOO_LARGE",
+                  "message": "גוף הבקשה גדול מהמותר (1mb)."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "שגיאה לא צפויה, כולל כשל פענוח (INTERNAL_ERROR)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "errorCode": "INTERNAL_ERROR",
+                  "message": "אירעה שגיאה פנימית בשרת."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cipher-records/{id}": {
+      "get": {
+        "tags": [
+          "Cipher Records"
+        ],
+        "summary": "פרטי רשומה",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "מזהה הרשומה (UUID)",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "הרשאות: מחובר. שולח או נמען מקבלים את התוכן המפוענח. מנהל שאינו צד לרשומה, או משתמש אחר ברשומה PUBLIC, מקבלים recipientEmail ו-content כ-null. רשומה PRIVATE של אחרים מחזירה 404 כדי לא לחשוף את קיומה.",
+        "responses": {
+          "200": {
+            "description": "פרטי הרשומה",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CipherRecordDetails"
+                },
+                "examples": {
+                  "party": {
+                    "summary": "שולח או נמען",
+                    "value": {
+                      "id": "b8e2d6a4-1c3f-4e5a-9b7d-0f2e4c6a8b10",
+                      "title": "חוזה שכירות",
+                      "description": "טיוטה ראשונה לבדיקה",
+                      "category": "DOCUMENT",
+                      "visibility": "PRIVATE",
+                      "createdAt": "2026-10-26T10:00:00.000Z",
+                      "senderEmail": "dana@example.com",
+                      "recipientEmail": "rivka@example.com",
+                      "content": "מספר החשבון הוא 12-345-6789"
+                    }
+                  },
+                  "other": {
+                    "summary": "מנהל או משתמש אחר ברשומה ציבורית",
+                    "value": {
+                      "id": "b8e2d6a4-1c3f-4e5a-9b7d-0f2e4c6a8b10",
+                      "title": "חוזה שכירות",
+                      "description": "טיוטה ראשונה לבדיקה",
+                      "category": "DOCUMENT",
+                      "visibility": "PUBLIC",
+                      "createdAt": "2026-10-26T10:00:00.000Z",
+                      "senderEmail": "dana@example.com",
+                      "recipientEmail": null,
+                      "content": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "טוקן חסר, פגום או שפג תוקפו (UNAUTHORIZED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "errorCode": "UNAUTHORIZED",
+                  "message": "נדרשת התחברות."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "הרשומה אינה קיימת, או שהפונה אינו רשאי לדעת על קיומה (RECORD_NOT_FOUND)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "errorCode": "RECORD_NOT_FOUND",
+                  "message": "הרשומה לא נמצאה."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "שגיאה לא צפויה, כולל כשל פענוח (INTERNAL_ERROR)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "errorCode": "INTERNAL_ERROR",
+                  "message": "אירעה שגיאה פנימית בשרת."
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Cipher Records"
+        ],
+        "summary": "עריכת רשומה (מטא־נתונים ותוכן)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "מזהה הרשומה (UUID)",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "הרשאות: הבעלים בלבד. מי שרואה את הרשומה ואינו הבעלים (מנהל, נמען, משתמש ברשומה PUBLIC) מקבל 403. מי שאינו רשאי לדעת על קיומה מקבל 404. השדה content אופציונלי: אם נשלח, השרת מצפין אותו מחדש ומחליף את התוכן; אם לא נשלח, התוכן נשאר כפי שהוא. התשובה אינה כוללת את התוכן.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCipherRecordRequest"
+              },
+              "examples": {
+                "withContent": {
+                  "summary": "עדכון כולל תוכן",
+                  "value": {
+                    "title": "חוזה שכירות מעודכן",
+                    "description": "גרסה סופית",
+                    "category": "NOTE",
+                    "visibility": "PRIVATE",
+                    "content": "מספר החשבון המעודכן הוא 98-765-4321"
+                  }
+                },
+                "metadataOnly": {
+                  "summary": "מטא־נתונים בלבד, התוכן נשאר",
+                  "value": {
+                    "title": "חוזה שכירות מעודכן",
+                    "description": "גרסה סופית",
+                    "category": "NOTE",
+                    "visibility": "PUBLIC"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "הרשומה עודכנה",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CipherRecordListItem"
+                },
+                "example": {
+                  "id": "b8e2d6a4-1c3f-4e5a-9b7d-0f2e4c6a8b10",
+                  "title": "חוזה שכירות מעודכן",
+                  "description": "גרסה סופית",
+                  "category": "NOTE",
+                  "visibility": "PRIVATE",
+                  "createdAt": "2026-10-26T10:00:00.000Z",
+                  "senderEmail": "dana@example.com"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "נתונים שאינם עומדים בסכמה (VALIDATION_ERROR)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "errorCode": "VALIDATION_ERROR",
+                  "message": "הנתונים שנשלחו אינם תקינים.",
+                  "details": [
+                    {
+                      "field": "title",
+                      "message": "כותרת היא שדה חובה"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "טוקן חסר, פגום או שפג תוקפו (UNAUTHORIZED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "errorCode": "UNAUTHORIZED",
+                  "message": "נדרשת התחברות."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "הפונה רואה את הרשומה אך אינו הבעלים",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "errorCode": "FORBIDDEN",
+                  "message": "רק יוצר הרשומה רשאי לערוך אותה."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "הרשומה אינה קיימת, או שהפונה אינו רשאי לדעת על קיומה (RECORD_NOT_FOUND)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "errorCode": "RECORD_NOT_FOUND",
+                  "message": "הרשומה לא נמצאה."
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "גוף הבקשה כבד מ-1mb (PAYLOAD_TOO_LARGE). חריגה מאורך התוכן היא 400 ולא 413.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "errorCode": "PAYLOAD_TOO_LARGE",
+                  "message": "גוף הבקשה גדול מהמותר (1mb)."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "שגיאה לא צפויה, כולל כשל פענוח (INTERNAL_ERROR)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "errorCode": "INTERNAL_ERROR",
+                  "message": "אירעה שגיאה פנימית בשרת."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/users": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "רשימת כל המשתמשים",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "הרשאות: ADMIN בלבד. משתמש רגיל מקבל 403. אין לנתיב זה מסך בקליינט.",
+        "responses": {
+          "200": {
+            "description": "כל המשתמשים",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AdminUser"
+                  }
+                },
+                "example": [
+                  {
+                    "id": "3f1c2b9e-8a41-4f0e-9d3a-2c5b7e1a0f11",
+                    "email": "dana@example.com",
+                    "role": "USER",
+                    "createdAt": "2026-10-20T08:00:00.000Z"
+                  },
+                  {
+                    "id": "7d9e1f2a-3b4c-4d5e-8f6a-1b2c3d4e5f60",
+                    "email": "admin@example.com",
+                    "role": "ADMIN",
+                    "createdAt": "2026-10-19T08:00:00.000Z"
+                  }
+                ]
+              }
+            }
+          },
+          "401": {
+            "description": "טוקן חסר, פגום או שפג תוקפו (UNAUTHORIZED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "errorCode": "UNAUTHORIZED",
+                  "message": "נדרשת התחברות."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "משתמש רגיל",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "errorCode": "FORBIDDEN",
+                  "message": "הפעולה מותרת למנהל בלבד."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "שגיאה לא צפויה, כולל כשל פענוח (INTERNAL_ERROR)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "errorCode": "INTERNAL_ERROR",
+                  "message": "אירעה שגיאה פנימית בשרת."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
