@@ -6,6 +6,7 @@ import { ProtectedRoute } from "./routes/ProtectedRoute"
 import { RecordPage } from "./pages/RecordPage"
 import { RecordFormPage } from "./pages/RecordFormPage"
 import { RecordDetailsPage } from "./pages/RecordDetailsPage"
+import { Layout } from "./components/Layout"
 function App() {
 
 
@@ -18,10 +19,12 @@ function App() {
       <Route path="/" element={<Navigate to="/records" replace />} />
 
       <Route element={<ProtectedRoute />} >
-        <Route path="/records" element={<RecordPage />} />
-        <Route path="/records/new" element={<RecordFormPage />} />
-        <Route path="/records/:id" element={<RecordDetailsPage />} />
-        <Route path="/records/:id/edit" element={<RecordFormPage />} />
+        <Route element={<Layout />}>
+          <Route path="/records" element={<RecordPage />} />
+          <Route path="/records/new" element={<RecordFormPage />} />
+          <Route path="/records/:id" element={<RecordDetailsPage />} />
+          <Route path="/records/:id/edit" element={<RecordFormPage />} />
+        </Route>
       </Route>
 
       <Route path="*" element={<NotFoundPage />} />
