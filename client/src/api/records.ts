@@ -2,7 +2,7 @@ import type { CreateRecordRequest, RecordDetails, RecordListItem, RecordsListRes
 import { apiClient } from "./client";
 
 export const getRecords = async (query: RecordsQuery) => {
-    const response = await apiClient.get<RecordsListResponse>('/cipher-records',{params:{ pageSize:100,...query}});
+    const response = await apiClient.get<RecordsListResponse>('/cipher-records', { params: { pageSize: 100, ...query } });
     return response.data
 }
 
