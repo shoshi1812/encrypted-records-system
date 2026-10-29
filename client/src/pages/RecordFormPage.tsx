@@ -45,7 +45,7 @@ export const RecordFormPage = () => {
     const onSubmit = (values: CreateRecordRequest) => {
         const description = values.description || undefined
         if (isEdit) {
-            updateMutation.mutate({ title: values.title, description, category: values.category, visibility: values.visibility, content: values.content })
+            updateMutation.mutate({ title: values.title, description: values.description, category: values.category, visibility: values.visibility, content: values.content })
         } else {
             createMutation.mutate({ ...values, description })
         }
@@ -57,7 +57,7 @@ export const RecordFormPage = () => {
     if (isEdit && recordQuery.isPending) return <p>טוען...</p>
     if (isEdit && recordQuery.isError) return <p>{recordQuery.error.message}</p>
     return (<>
-       <h1>{isEdit ? 'עריכת רשומה' : 'רשומה חדשה'}</h1>
+        <h1>{isEdit ? 'עריכת רשומה' : 'רשומה חדשה'}</h1>
         <form onSubmit={handleSubmit(onSubmit)} noValidate>
 
             <div>
@@ -106,9 +106,9 @@ export const RecordFormPage = () => {
             </div>
 
             <div>
-               
+
                 <label htmlFor="content">תוכן</label>
-              {isEdit && <p>שמירה תחליף את התוכן הקודם</p>}
+                {isEdit && <p>שמירה תחליף את התוכן הקודם</p>}
                 <textarea id="content" rows={8} {...register('content', {
                     required: 'תוכן הוא שדה חובה',
                     maxLength: { value: 20000, message: 'עד 20000 תווים' },
